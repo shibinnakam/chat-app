@@ -12,14 +12,11 @@ app.use(express.json());
 // Load Message model
 const Message = require("./models/Message");
 
-// MongoDB Connection
+// ---------------- MongoDB Connection (Fix for Mongoose 8 + Node 22) ----------------
 mongoose
-  .connect(process.env.MONGO_URL, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(process.env.MONGO_URL)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err));
+  .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
 // Create server for Socket.IO
 const server = http.createServer(app);
@@ -39,7 +36,7 @@ io.on("connection", (socket) => {
   });
 });
 
-// ---------- API Routes ----------
+// ---------------- API Routes ----------------
 
 // Get all messages
 app.get("/messages", async (req, res) => {
@@ -56,7 +53,7 @@ app.post("/messages", async (req, res) => {
   try {
     const msg = await Message.create(req.body);
 
-    // Send real-time message
+    // Emit message through WebSockets
     io.emit("newMessage", msg);
 
     res.json({ success: true, message: "Message sent", data: msg });
@@ -65,7 +62,7 @@ app.post("/messages", async (req, res) => {
   }
 });
 
-// ---------- Start Server ----------
+// ---------------- Start Server ----------------
 
 const PORT = process.env.PORT || 8080;
 
