@@ -12,24 +12,26 @@ app.use(express.json());
 // Load Message model
 const Message = require("./models/Message");
 
-// ---------------- MongoDB Connection (Fix for Mongoose 8 + Node 22) ----------------
+// ---------------- MongoDB Connection ----------------
 mongoose
   .connect(process.env.MONGO_URL)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch((err) => console.error("❌ MongoDB Error:", err.message));
 
-// Create server for Socket.IO
+// ---------------- Socket.IO Setup ----------------
 const server = http.createServer(app);
-
-// Socket.IO setup
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-  },
+  cors: { origin: "*" },
 });
 
 io.on("connection", (socket) => {
   console.log("🔌 A user connected");
+
+  // Typing indicator
+  socket.on("typing", (data) => {
+    // Broadcast to everyone else
+    socket.broadcast.emit("typing", data);
+  });
 
   socket.on("disconnect", () => {
     console.log("❌ User disconnected");
@@ -38,7 +40,7 @@ io.on("connection", (socket) => {
 
 // ---------------- API Routes ----------------
 
-// Show homepage so Render does NOT show "Cannot GET /"
+// Render homepage so Render does not show "Cannot GET /"
 app.get("/", (req, res) => {
   res.send("Chat App Backend is Running 🚀");
 });
@@ -58,8 +60,14 @@ app.post("/messages", async (req, res) => {
   try {
     const msg = await Message.create(req.body);
 
-    // Emit message through WebSockets
+    // Emit real-time message
     io.emit("newMessage", msg);
+
+    // Auto-delete from database after 30 seconds
+    setTimeout(async () => {
+      await Message.findByIdAndDelete(msg._id);
+      io.emit("deleteMessage", msg._id); // Notify clients to remove from UI
+    }, 30000); // 30,000ms = 30 seconds
 
     res.json({ success: true, message: "Message sent", data: msg });
   } catch (err) {
@@ -68,9 +76,7 @@ app.post("/messages", async (req, res) => {
 });
 
 // ---------------- Start Server ----------------
-
 const PORT = process.env.PORT || 8080;
-
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
