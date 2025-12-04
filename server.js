@@ -38,6 +38,11 @@ io.on("connection", (socket) => {
 
 // ---------------- API Routes ----------------
 
+// Show homepage so Render does NOT show "Cannot GET /"
+app.get("/", (req, res) => {
+  res.send("Chat App Backend is Running 🚀");
+});
+
 // Get all messages
 app.get("/messages", async (req, res) => {
   try {
