@@ -24,16 +24,36 @@ const io = new Server(server, {
   cors: { origin: "*" },
 });
 
+// Store online users
+let onlineUsers = {};
+
 io.on("connection", (socket) => {
   console.log("🔌 A user connected");
 
-  // Typing indicator
+  // ------- USER COMES ONLINE -------
+  socket.on("userOnline", (name) => {
+    onlineUsers[name] = socket.id;
+    io.emit("onlineUsers", onlineUsers);
+  });
+
+  // ------- TYPING INDICATOR -------
   socket.on("typing", (data) => {
-    // Broadcast to everyone else
     socket.broadcast.emit("typing", data);
   });
 
+  // ------- MARK MESSAGE READ -------
+  socket.on("markRead", async (msgId) => {
+    await Message.findByIdAndUpdate(msgId, { read: true });
+    io.emit("readReceipt", msgId);
+  });
+
+  // ------- USER DISCONNECT -------
   socket.on("disconnect", () => {
+    for (let user in onlineUsers) {
+      if (onlineUsers[user] === socket.id) delete onlineUsers[user];
+    }
+    io.emit("onlineUsers", onlineUsers);
+
     console.log("❌ User disconnected");
   });
 });
@@ -63,11 +83,11 @@ app.post("/messages", async (req, res) => {
     // Emit real-time message
     io.emit("newMessage", msg);
 
-    // Auto-delete from database after 30 seconds
+    // Auto-delete from DB after 30 seconds
     setTimeout(async () => {
       await Message.findByIdAndDelete(msg._id);
-      io.emit("deleteMessage", msg._id); // Notify clients to remove from UI
-    }, 30000); // 30,000ms = 30 seconds
+      io.emit("deleteMessage", msg._id);
+    }, 30000);
 
     res.json({ success: true, message: "Message sent", data: msg });
   } catch (err) {
